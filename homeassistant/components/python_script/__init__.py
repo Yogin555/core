@@ -1,5 +1,6 @@
 """Component to allow running Python scripts."""
 
+from collections.abc import Mapping, Sequence
 import datetime
 import glob
 import logging
@@ -7,6 +8,7 @@ from numbers import Number
 import operator
 import os
 import time
+import types
 from typing import Any
 
 from RestrictedPython import (
@@ -108,13 +110,13 @@ def setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
-def discover_scripts(hass):
+def discover_scripts(hass: HomeAssistant) -> None:
     """Discover python scripts in folder."""
     path = hass.config.path(FOLDER)
 
     if not os.path.isdir(path):
         _LOGGER.warning("Folder %s not found in configuration folder", FOLDER)
-        return False
+        return
 
     def python_script_service_handler(call: ServiceCall) -> ServiceResponse:
         """Handle python script service calls."""
@@ -167,6 +169,20 @@ IOPERATOR_TO_OPERATOR = {
 }
 
 
+def guarded_import(
+    name: str,
+    globals: Mapping[str, object] | None = None,
+    locals: Mapping[str, object] | None = None,
+    fromlist: Sequence[str] = (),
+    level: int = 0,
+) -> types.ModuleType:
+    """Guard imports."""
+    # Allow import of _strptime needed by datetime.datetime.strptime
+    if name == "_strptime":
+        return __import__(name, globals, locals, fromlist, level)
+    raise ScriptError(f"Not allowed to import {name}")
+
+
 def guarded_inplacevar(op: str, target: Any, operand: Any) -> Any:
     """Implement augmented-assign (+=, -=, etc.) operators for restricted code.
 
@@ -200,7 +216,7 @@ def execute(hass, filename, source, data=None, return_response=False):
         _LOGGER.error(
             "Error loading script %s: %s", filename, ", ".join(compiled.errors)
         )
-        return
+        return None
 
     if compiled.warnings:
         _LOGGER.warning(
@@ -232,6 +248,7 @@ def execute(hass, filename, source, data=None, return_response=False):
         return getattr(obj, name, default)
 
     extra_builtins = {
+        "__import__": guarded_import,
         "datetime": datetime,
         "sorted": sorted,
         "time": TimeWrapper(),
@@ -277,7 +294,7 @@ def execute(hass, filename, source, data=None, return_response=False):
         if not isinstance(restricted_globals["output"], dict):
             output_type = type(restricted_globals["output"])
             restricted_globals["output"] = {}
-            raise ScriptError(
+            raise ScriptError(  # noqa: TRY301
                 f"Expected `output` to be a dictionary, was {output_type}"
             )
     except ScriptError as err:
@@ -285,7 +302,7 @@ def execute(hass, filename, source, data=None, return_response=False):
             raise ServiceValidationError(f"Error executing script: {err}") from err
         logger.error("Error executing script: %s", err)
         return None
-    except Exception as err:  # pylint: disable=broad-except
+    except Exception as err:
         if return_response:
             raise HomeAssistantError(
                 f"Error executing script ({type(err).__name__}): {err}"

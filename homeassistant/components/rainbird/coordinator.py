@@ -5,9 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 import datetime
-from functools import cached_property
 import logging
-from typing import TypeVar
 
 import aiohttp
 from pyrainbird.async_client import (
@@ -38,8 +36,6 @@ DEBOUNCER_COOLDOWN = 5
 CONECTION_LIMIT = 1
 
 _LOGGER = logging.getLogger(__name__)
-
-_T = TypeVar("_T")
 
 
 @dataclass
@@ -169,36 +165,3 @@ class RainbirdScheduleUpdateCoordinator(DataUpdateCoordinator[Schedule]):
                 return await self._controller.get_schedule()
         except RainbirdApiException as err:
             raise UpdateFailed(f"Error communicating with Device: {err}") from err
-
-
-@dataclass
-class RainbirdData:
-    """Holder for shared integration data.
-
-    The coordinators are lazy since they may only be used by some platforms when needed.
-    """
-
-    hass: HomeAssistant
-    entry: ConfigEntry
-    controller: AsyncRainbirdController
-    model_info: ModelAndVersion
-
-    @cached_property
-    def coordinator(self) -> RainbirdUpdateCoordinator:
-        """Return RainbirdUpdateCoordinator."""
-        return RainbirdUpdateCoordinator(
-            self.hass,
-            name=self.entry.title,
-            controller=self.controller,
-            unique_id=self.entry.unique_id,
-            model_info=self.model_info,
-        )
-
-    @cached_property
-    def schedule_coordinator(self) -> RainbirdScheduleUpdateCoordinator:
-        """Return RainbirdScheduleUpdateCoordinator."""
-        return RainbirdScheduleUpdateCoordinator(
-            self.hass,
-            name=f"{self.entry.title} Schedule",
-            controller=self.controller,
-        )

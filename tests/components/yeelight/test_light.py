@@ -776,7 +776,9 @@ async def test_state_already_set_avoid_ratelimit(hass: HomeAssistant) -> None:
 
 
 async def test_device_types(
-    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+    hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Test different device types."""
     mocked_bulb = _mocked_bulb()
@@ -824,9 +826,8 @@ async def test_device_types(
         target_properties["music_mode"] = False
         assert dict(state.attributes) == target_properties
         await hass.config_entries.async_unload(config_entry.entry_id)
-        await config_entry.async_remove(hass)
-        registry = er.async_get(hass)
-        registry.async_clear_config_entry(config_entry.entry_id)
+        await hass.config_entries.async_remove(config_entry.entry_id)
+        entity_registry.async_clear_config_entry(config_entry.entry_id)
         mocked_bulb.last_properties["nl_br"] = original_nightlight_brightness
 
         # nightlight as a setting of the main entity
@@ -846,8 +847,8 @@ async def test_device_types(
             assert dict(state.attributes) == nightlight_mode_properties
 
             await hass.config_entries.async_unload(config_entry.entry_id)
-            await config_entry.async_remove(hass)
-            registry.async_clear_config_entry(config_entry.entry_id)
+            await hass.config_entries.async_remove(config_entry.entry_id)
+            entity_registry.async_clear_config_entry(config_entry.entry_id)
             await hass.async_block_till_done()
             mocked_bulb.last_properties.pop("active_mode")
 
@@ -869,8 +870,8 @@ async def test_device_types(
             assert dict(state.attributes) == nightlight_entity_properties
 
             await hass.config_entries.async_unload(config_entry.entry_id)
-            await config_entry.async_remove(hass)
-            registry.async_clear_config_entry(config_entry.entry_id)
+            await hass.config_entries.async_remove(config_entry.entry_id)
+            entity_registry.async_clear_config_entry(config_entry.entry_id)
             await hass.async_block_till_done()
 
     bright = round(255 * int(PROPERTIES["bright"]) / 100)
@@ -945,8 +946,8 @@ async def test_device_types(
             "color_mode": "color_temp",
             "supported_color_modes": ["color_temp", "hs", "rgb"],
             "hs_color": (26.812, 34.87),
-            "rgb_color": (255, 205, 166),
-            "xy_color": (0.421, 0.364),
+            "rgb_color": (255, 206, 166),
+            "xy_color": (0.42, 0.365),
         },
         nightlight_entity_properties={
             "supported_features": 0,
@@ -958,8 +959,8 @@ async def test_device_types(
             "effect": None,
             "supported_features": SUPPORT_YEELIGHT,
             "hs_color": (28.401, 100.0),
-            "rgb_color": (255, 120, 0),
-            "xy_color": (0.621, 0.367),
+            "rgb_color": (255, 121, 0),
+            "xy_color": (0.62, 0.368),
             "min_color_temp_kelvin": model_specs["color_temp"]["min"],
             "max_color_temp_kelvin": color_temperature_mired_to_kelvin(
                 color_temperature_kelvin_to_mired(model_specs["color_temp"]["max"])
@@ -1190,8 +1191,8 @@ async def test_device_types(
             "color_mode": "color_temp",
             "supported_color_modes": ["color_temp"],
             "hs_color": (26.812, 34.87),
-            "rgb_color": (255, 205, 166),
-            "xy_color": (0.421, 0.364),
+            "rgb_color": (255, 206, 166),
+            "xy_color": (0.42, 0.365),
         },
         nightlight_entity_properties={
             "supported_features": 0,
@@ -1225,8 +1226,8 @@ async def test_device_types(
             "color_mode": "color_temp",
             "supported_color_modes": ["color_temp"],
             "hs_color": (28.391, 65.659),
-            "rgb_color": (255, 166, 87),
-            "xy_color": (0.526, 0.387),
+            "rgb_color": (255, 167, 88),
+            "xy_color": (0.524, 0.388),
         },
     )
 
@@ -1262,8 +1263,8 @@ async def test_device_types(
             "color_mode": "color_temp",
             "supported_color_modes": ["color_temp"],
             "hs_color": (26.812, 34.87),
-            "rgb_color": (255, 205, 166),
-            "xy_color": (0.421, 0.364),
+            "rgb_color": (255, 206, 166),
+            "xy_color": (0.42, 0.365),
         },
         nightlight_entity_properties={
             "supported_features": 0,
@@ -1300,8 +1301,8 @@ async def test_device_types(
             "color_mode": "color_temp",
             "supported_color_modes": ["color_temp"],
             "hs_color": (28.391, 65.659),
-            "rgb_color": (255, 166, 87),
-            "xy_color": (0.526, 0.387),
+            "rgb_color": (255, 167, 88),
+            "xy_color": (0.524, 0.388),
         },
     )
     # Background light - color mode CT
@@ -1325,8 +1326,8 @@ async def test_device_types(
             "color_mode": "color_temp",
             "supported_color_modes": ["color_temp", "hs", "rgb"],
             "hs_color": (27.001, 19.243),
-            "rgb_color": (255, 228, 205),
-            "xy_color": (0.372, 0.35),
+            "rgb_color": (255, 228, 206),
+            "xy_color": (0.371, 0.349),
         },
         name=f"{UNIQUE_FRIENDLY_NAME} Ambilight",
         entity_id=f"{ENTITY_LIGHT}_ambilight",

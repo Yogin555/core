@@ -6,12 +6,8 @@ from collections.abc import Iterable
 from typing import Any
 
 from aiohttp import web
-from hassil.recognize import (
-    MISSING_ENTITY,
-    RecognizeResult,
-    UnmatchedRangeEntity,
-    UnmatchedTextEntity,
-)
+from hassil.recognize import MISSING_ENTITY, RecognizeResult
+from hassil.string_matcher import UnmatchedRangeEntity, UnmatchedTextEntity
 import voluptuous as vol
 
 from homeassistant.components import http, websocket_api
@@ -21,14 +17,15 @@ from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.helpers import config_validation as cv, intent
 from homeassistant.util import language as language_util
 
-from .agent_manager import agent_id_validator, async_converse, get_agent_manager
-from .const import HOME_ASSISTANT_AGENT
-from .default_agent import (
-    METADATA_CUSTOM_FILE,
-    METADATA_CUSTOM_SENTENCE,
-    DefaultAgent,
-    SentenceTriggerResult,
+from .agent_manager import (
+    agent_id_validator,
+    async_converse,
+    async_get_agent,
+    get_agent_manager,
 )
+from .const import DATA_COMPONENT, DATA_DEFAULT_ENTITY
+from .default_agent import METADATA_CUSTOM_FILE, METADATA_CUSTOM_SENTENCE, DefaultAgent
+from .entity import ConversationEntity
 from .models import ConversationInput
 
 
@@ -83,8 +80,12 @@ async def websocket_prepare(
     msg: dict[str, Any],
 ) -> None:
     """Reload intents."""
-    manager = get_agent_manager(hass)
-    agent = await manager.async_get_agent(msg.get("agent_id"))
+    agent = async_get_agent(hass, msg.get("agent_id"))
+
+    if agent is None:
+        connection.send_error(msg["id"], websocket_api.ERR_NOT_FOUND, "Agent not found")
+        return
+
     await agent.async_prepare(msg.get("language"))
     connection.send_result(msg["id"])
 
@@ -101,14 +102,37 @@ async def websocket_list_agents(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
     """List conversation agents and, optionally, if they support a given language."""
-    manager = get_agent_manager(hass)
-
     country = msg.get("country")
     language = msg.get("language")
     agents = []
 
+    for entity in hass.data[DATA_COMPONENT].entities:
+        supported_languages = entity.supported_languages
+        if language and supported_languages != MATCH_ALL:
+            supported_languages = language_util.matches(
+                language, supported_languages, country
+            )
+
+        name = entity.entity_id
+        if state := hass.states.get(entity.entity_id):
+            name = state.name
+
+        agents.append(
+            {
+                "id": entity.entity_id,
+                "name": name,
+                "supported_languages": supported_languages,
+            }
+        )
+
+    manager = get_agent_manager(hass)
+
     for agent_info in manager.async_get_agent_info():
-        agent = await manager.async_get_agent(agent_info.id)
+        agent = manager.async_get_agent(agent_info.id)
+        assert agent is not None
+
+        if isinstance(agent, ConversationEntity):
+            continue
 
         supported_languages = agent.supported_languages
         if language and supported_languages != MATCH_ALL:
@@ -139,45 +163,42 @@ async def websocket_hass_agent_debug(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
     """Return intents that would be matched by the default agent for a list of sentences."""
-    agent = await get_agent_manager(hass).async_get_agent(HOME_ASSISTANT_AGENT)
+    agent = hass.data.get(DATA_DEFAULT_ENTITY)
     assert isinstance(agent, DefaultAgent)
-    results = [
-        await agent.async_recognize(
-            ConversationInput(
-                text=sentence,
-                context=connection.context(msg),
-                conversation_id=None,
-                device_id=msg.get("device_id"),
-                language=msg.get("language", hass.config.language),
-            )
-        )
-        for sentence in msg["sentences"]
-    ]
 
     # Return results for each sentence in the same order as the input.
     result_dicts: list[dict[str, Any] | None] = []
-    for result in results:
+    for sentence in msg["sentences"]:
+        user_input = ConversationInput(
+            text=sentence,
+            context=connection.context(msg),
+            conversation_id=None,
+            device_id=msg.get("device_id"),
+            language=msg.get("language", hass.config.language),
+            agent_id=None,
+        )
         result_dict: dict[str, Any] | None = None
-        if isinstance(result, SentenceTriggerResult):
+
+        if trigger_result := await agent.async_recognize_sentence_trigger(user_input):
             result_dict = {
                 # Matched a user-defined sentence trigger.
                 # We can't provide the response here without executing the
                 # trigger.
                 "match": True,
                 "source": "trigger",
-                "sentence_template": result.sentence_template or "",
+                "sentence_template": trigger_result.sentence_template or "",
             }
-        elif isinstance(result, RecognizeResult):
-            successful_match = not result.unmatched_entities
+        elif intent_result := await agent.async_recognize_intent(user_input):
+            successful_match = not intent_result.unmatched_entities
             result_dict = {
                 # Name of the matching intent (or the closest)
                 "intent": {
-                    "name": result.intent.name,
+                    "name": intent_result.intent.name,
                 },
                 # Slot values that would be received by the intent
                 "slots": {  # direct access to values
                     entity_key: entity.text or entity.value
-                    for entity_key, entity in result.entities.items()
+                    for entity_key, entity in intent_result.entities.items()
                 },
                 # Extra slot details, such as the originally matched text
                 "details": {
@@ -186,7 +207,7 @@ async def websocket_hass_agent_debug(
                         "value": entity.value,
                         "text": entity.text,
                     }
-                    for entity_key, entity in result.entities.items()
+                    for entity_key, entity in intent_result.entities.items()
                 },
                 # Entities/areas/etc. that would be targeted
                 "targets": {},
@@ -195,24 +216,26 @@ async def websocket_hass_agent_debug(
                 # Text of the sentence template that matched (or was closest)
                 "sentence_template": "",
                 # When match is incomplete, this will contain the best slot guesses
-                "unmatched_slots": _get_unmatched_slots(result),
+                "unmatched_slots": _get_unmatched_slots(intent_result),
             }
 
             if successful_match:
                 result_dict["targets"] = {
                     state.entity_id: {"matched": is_matched}
-                    for state, is_matched in _get_debug_targets(hass, result)
+                    for state, is_matched in _get_debug_targets(hass, intent_result)
                 }
 
-            if result.intent_sentence is not None:
-                result_dict["sentence_template"] = result.intent_sentence.text
+            if intent_result.intent_sentence is not None:
+                result_dict["sentence_template"] = intent_result.intent_sentence.text
 
             # Inspect metadata to determine if this matched a custom sentence
-            if result.intent_metadata and result.intent_metadata.get(
+            if intent_result.intent_metadata and intent_result.intent_metadata.get(
                 METADATA_CUSTOM_SENTENCE
             ):
                 result_dict["source"] = "custom"
-                result_dict["file"] = result.intent_metadata.get(METADATA_CUSTOM_FILE)
+                result_dict["file"] = intent_result.intent_metadata.get(
+                    METADATA_CUSTOM_FILE
+                )
             else:
                 result_dict["source"] = "builtin"
 
@@ -276,9 +299,9 @@ def _get_debug_targets(
 
 def _get_unmatched_slots(
     result: RecognizeResult,
-) -> dict[str, str | int]:
+) -> dict[str, str | int | float]:
     """Return a dict of unmatched text/range slot entities."""
-    unmatched_slots: dict[str, str | int] = {}
+    unmatched_slots: dict[str, str | int | float] = {}
     for entity in result.unmatched_entities_list:
         if isinstance(entity, UnmatchedTextEntity):
             if entity.text == MISSING_ENTITY:

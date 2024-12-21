@@ -1,5 +1,6 @@
 """The tests for the Light component."""
 
+from typing import Literal
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
@@ -22,13 +23,14 @@ from homeassistant.exceptions import HomeAssistantError, Unauthorized
 from homeassistant.setup import async_setup_component
 import homeassistant.util.color as color_util
 
+from .common import MockLight
+
 from tests.common import (
     MockEntityPlatform,
     MockUser,
     async_mock_service,
     setup_test_component_platform,
 )
-from tests.components.light.common import MockLight
 
 orig_Profiles = light.Profiles
 
@@ -980,9 +982,9 @@ async def test_light_brightness_step(hass: HomeAssistant) -> None:
     assert entity0.state == "off"  # 126 - 126; brightness is 0, light should turn off
 
 
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_light_brightness_pct_conversion(
     hass: HomeAssistant,
-    enable_custom_integrations: None,
     mock_light_entities: list[MockLight],
 ) -> None:
     """Test that light brightness percent conversion."""
@@ -1143,7 +1145,7 @@ invalid_no_brightness_no_color_no_transition,,,
 
 @pytest.mark.parametrize("light_state", [STATE_ON, STATE_OFF])
 async def test_light_backwards_compatibility_supported_color_modes(
-    hass: HomeAssistant, light_state
+    hass: HomeAssistant, light_state: Literal["on", "off"]
 ) -> None:
     """Test supported_color_modes if not implemented by the entity."""
     entities = [
@@ -1285,9 +1287,9 @@ async def test_light_backwards_compatibility_color_mode(hass: HomeAssistant) -> 
     state = hass.states.get(entity2.entity_id)
     assert state.attributes["supported_color_modes"] == [light.ColorMode.COLOR_TEMP]
     assert state.attributes["color_mode"] == light.ColorMode.COLOR_TEMP
-    assert state.attributes["rgb_color"] == (201, 218, 255)
+    assert state.attributes["rgb_color"] == (202, 218, 255)
     assert state.attributes["hs_color"] == (221.575, 20.9)
-    assert state.attributes["xy_color"] == (0.277, 0.287)
+    assert state.attributes["xy_color"] == (0.278, 0.287)
 
     state = hass.states.get(entity3.entity_id)
     assert state.attributes["supported_color_modes"] == [light.ColorMode.HS]

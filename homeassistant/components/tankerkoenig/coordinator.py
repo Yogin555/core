@@ -28,11 +28,13 @@ from .const import CONF_FUEL_TYPES, CONF_STATIONS
 
 _LOGGER = logging.getLogger(__name__)
 
+type TankerkoenigConfigEntry = ConfigEntry[TankerkoenigDataUpdateCoordinator]
 
-class TankerkoenigDataUpdateCoordinator(DataUpdateCoordinator):
+
+class TankerkoenigDataUpdateCoordinator(DataUpdateCoordinator[dict[str, PriceInfo]]):
     """Get the latest data from the API."""
 
-    config_entry: ConfigEntry
+    config_entry: TankerkoenigConfigEntry
 
     def __init__(
         self,
@@ -101,7 +103,9 @@ class TankerkoenigDataUpdateCoordinator(DataUpdateCoordinator):
                 for station_id in self._selected_stations
             ):
                 _LOGGER.debug("Removing obsolete device entry %s", device.name)
-                device_reg.async_remove_device(device.id)
+                device_reg.async_update_device(
+                    device.id, remove_config_entry_id=self.config_entry.entry_id
+                )
 
         if len(self.stations) > 10:
             _LOGGER.warning(

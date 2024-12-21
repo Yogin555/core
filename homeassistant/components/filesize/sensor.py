@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime
 import logging
-import pathlib
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -12,13 +11,13 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_FILE_PATH, EntityCategory, UnitOfInformation
+from homeassistant.const import EntityCategory, UnitOfInformation
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from . import FileSizeConfigEntry
 from .const import DOMAIN
 from .coordinator import FileSizeCoordinator
 
@@ -48,25 +47,24 @@ SENSOR_TYPES = (
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    SensorEntityDescription(
+        key="created",
+        translation_key="created",
+        entity_registry_enabled_default=False,
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
 )
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: FileSizeConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the platform from config entry."""
-
-    path = entry.data[CONF_FILE_PATH]
-    get_path = await hass.async_add_executor_job(pathlib.Path, path)
-    fullpath = str(get_path.absolute())
-
-    coordinator = FileSizeCoordinator(hass, fullpath)
-    await coordinator.async_config_entry_first_refresh()
-
     async_add_entities(
-        FilesizeEntity(description, fullpath, entry.entry_id, coordinator)
+        FilesizeEntity(description, entry.entry_id, entry.runtime_data)
         for description in SENSOR_TYPES
     )
 
@@ -79,13 +77,11 @@ class FilesizeEntity(CoordinatorEntity[FileSizeCoordinator], SensorEntity):
     def __init__(
         self,
         description: SensorEntityDescription,
-        path: str,
         entry_id: str,
         coordinator: FileSizeCoordinator,
     ) -> None:
         """Initialize the Filesize sensor."""
         super().__init__(coordinator)
-        base_name = path.split("/")[-1]
         self._attr_unique_id = (
             entry_id if description.key == "file" else f"{entry_id}-{description.key}"
         )
@@ -93,7 +89,6 @@ class FilesizeEntity(CoordinatorEntity[FileSizeCoordinator], SensorEntity):
         self._attr_device_info = DeviceInfo(
             entry_type=DeviceEntryType.SERVICE,
             identifiers={(DOMAIN, entry_id)},
-            name=base_name,
         )
 
     @property

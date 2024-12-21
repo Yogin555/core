@@ -10,12 +10,14 @@ from boschshcpy.exceptions import (
     SHCSessionError,
 )
 from boschshcpy.information import SHCInformation
+import pytest
 
 from homeassistant import config_entries
 from homeassistant.components import zeroconf
 from homeassistant.components.bosch_shc.config_flow import write_tls_asset
 from homeassistant.components.bosch_shc.const import CONF_SHC_CERT, CONF_SHC_KEY, DOMAIN
 from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResultType
 
 from tests.common import MockConfigEntry
 
@@ -34,13 +36,14 @@ DISCOVERY_INFO = zeroconf.ZeroconfServiceInfo(
 )
 
 
-async def test_form_user(hass: HomeAssistant, mock_zeroconf: None) -> None:
+@pytest.mark.usefixtures("mock_zeroconf")
+async def test_form_user(hass: HomeAssistant) -> None:
     """Test we get the form."""
 
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
-    assert result["type"] == "form"
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "user"
     assert result["errors"] == {}
 
@@ -65,7 +68,7 @@ async def test_form_user(hass: HomeAssistant, mock_zeroconf: None) -> None:
             {"host": "1.1.1.1"},
         )
 
-    assert result2["type"] == "form"
+    assert result2["type"] is FlowResultType.FORM
     assert result2["step_id"] == "credentials"
     assert result2["errors"] == {}
 
@@ -92,12 +95,12 @@ async def test_form_user(hass: HomeAssistant, mock_zeroconf: None) -> None:
         )
         await hass.async_block_till_done()
 
-    assert result3["type"] == "create_entry"
+    assert result3["type"] is FlowResultType.CREATE_ENTRY
     assert result3["title"] == "shc012345"
     assert result3["data"] == {
         "host": "1.1.1.1",
-        "ssl_certificate": hass.config.path(DOMAIN, CONF_SHC_CERT),
-        "ssl_key": hass.config.path(DOMAIN, CONF_SHC_KEY),
+        "ssl_certificate": hass.config.path(DOMAIN, "test-mac", CONF_SHC_CERT),
+        "ssl_key": hass.config.path(DOMAIN, "test-mac", CONF_SHC_KEY),
         "token": "abc:123",
         "hostname": "123",
     }
@@ -106,9 +109,8 @@ async def test_form_user(hass: HomeAssistant, mock_zeroconf: None) -> None:
     assert len(mock_setup_entry.mock_calls) == 1
 
 
-async def test_form_get_info_connection_error(
-    hass: HomeAssistant, mock_zeroconf: None
-) -> None:
+@pytest.mark.usefixtures("mock_zeroconf")
+async def test_form_get_info_connection_error(hass: HomeAssistant) -> None:
     """Test we handle connection error."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -125,7 +127,7 @@ async def test_form_get_info_connection_error(
             },
         )
 
-    assert result2["type"] == "form"
+    assert result2["type"] is FlowResultType.FORM
     assert result2["step_id"] == "user"
     assert result2["errors"] == {"base": "cannot_connect"}
 
@@ -147,12 +149,13 @@ async def test_form_get_info_exception(hass: HomeAssistant) -> None:
             },
         )
 
-    assert result2["type"] == "form"
+    assert result2["type"] is FlowResultType.FORM
     assert result2["step_id"] == "user"
     assert result2["errors"] == {"base": "unknown"}
 
 
-async def test_form_pairing_error(hass: HomeAssistant, mock_zeroconf: None) -> None:
+@pytest.mark.usefixtures("mock_zeroconf")
+async def test_form_pairing_error(hass: HomeAssistant) -> None:
     """Test we handle pairing error."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -179,7 +182,7 @@ async def test_form_pairing_error(hass: HomeAssistant, mock_zeroconf: None) -> N
             {"host": "1.1.1.1"},
         )
 
-    assert result2["type"] == "form"
+    assert result2["type"] is FlowResultType.FORM
     assert result2["step_id"] == "credentials"
     assert result2["errors"] == {}
 
@@ -193,12 +196,13 @@ async def test_form_pairing_error(hass: HomeAssistant, mock_zeroconf: None) -> N
         )
         await hass.async_block_till_done()
 
-    assert result3["type"] == "form"
+    assert result3["type"] is FlowResultType.FORM
     assert result3["step_id"] == "credentials"
     assert result3["errors"] == {"base": "pairing_failed"}
 
 
-async def test_form_user_invalid_auth(hass: HomeAssistant, mock_zeroconf: None) -> None:
+@pytest.mark.usefixtures("mock_zeroconf")
+async def test_form_user_invalid_auth(hass: HomeAssistant) -> None:
     """Test we handle invalid auth."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -225,7 +229,7 @@ async def test_form_user_invalid_auth(hass: HomeAssistant, mock_zeroconf: None) 
             {"host": "1.1.1.1"},
         )
 
-    assert result2["type"] == "form"
+    assert result2["type"] is FlowResultType.FORM
     assert result2["step_id"] == "credentials"
     assert result2["errors"] == {}
 
@@ -251,14 +255,13 @@ async def test_form_user_invalid_auth(hass: HomeAssistant, mock_zeroconf: None) 
         )
         await hass.async_block_till_done()
 
-    assert result3["type"] == "form"
+    assert result3["type"] is FlowResultType.FORM
     assert result3["step_id"] == "credentials"
     assert result3["errors"] == {"base": "invalid_auth"}
 
 
-async def test_form_validate_connection_error(
-    hass: HomeAssistant, mock_zeroconf: None
-) -> None:
+@pytest.mark.usefixtures("mock_zeroconf")
+async def test_form_validate_connection_error(hass: HomeAssistant) -> None:
     """Test we handle connection error."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -285,7 +288,7 @@ async def test_form_validate_connection_error(
             {"host": "1.1.1.1"},
         )
 
-    assert result2["type"] == "form"
+    assert result2["type"] is FlowResultType.FORM
     assert result2["step_id"] == "credentials"
     assert result2["errors"] == {}
 
@@ -311,14 +314,13 @@ async def test_form_validate_connection_error(
         )
         await hass.async_block_till_done()
 
-    assert result3["type"] == "form"
+    assert result3["type"] is FlowResultType.FORM
     assert result3["step_id"] == "credentials"
     assert result3["errors"] == {"base": "cannot_connect"}
 
 
-async def test_form_validate_session_error(
-    hass: HomeAssistant, mock_zeroconf: None
-) -> None:
+@pytest.mark.usefixtures("mock_zeroconf")
+async def test_form_validate_session_error(hass: HomeAssistant) -> None:
     """Test we handle session error."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -345,7 +347,7 @@ async def test_form_validate_session_error(
             {"host": "1.1.1.1"},
         )
 
-    assert result2["type"] == "form"
+    assert result2["type"] is FlowResultType.FORM
     assert result2["step_id"] == "credentials"
     assert result2["errors"] == {}
 
@@ -371,14 +373,13 @@ async def test_form_validate_session_error(
         )
         await hass.async_block_till_done()
 
-    assert result3["type"] == "form"
+    assert result3["type"] is FlowResultType.FORM
     assert result3["step_id"] == "credentials"
     assert result3["errors"] == {"base": "session_error"}
 
 
-async def test_form_validate_exception(
-    hass: HomeAssistant, mock_zeroconf: None
-) -> None:
+@pytest.mark.usefixtures("mock_zeroconf")
+async def test_form_validate_exception(hass: HomeAssistant) -> None:
     """Test we handle exception."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -405,7 +406,7 @@ async def test_form_validate_exception(
             {"host": "1.1.1.1"},
         )
 
-    assert result2["type"] == "form"
+    assert result2["type"] is FlowResultType.FORM
     assert result2["step_id"] == "credentials"
     assert result2["errors"] == {}
 
@@ -431,14 +432,13 @@ async def test_form_validate_exception(
         )
         await hass.async_block_till_done()
 
-    assert result3["type"] == "form"
+    assert result3["type"] is FlowResultType.FORM
     assert result3["step_id"] == "credentials"
     assert result3["errors"] == {"base": "unknown"}
 
 
-async def test_form_already_configured(
-    hass: HomeAssistant, mock_zeroconf: None
-) -> None:
+@pytest.mark.usefixtures("mock_zeroconf")
+async def test_form_already_configured(hass: HomeAssistant) -> None:
     """Test we get the form."""
 
     entry = MockConfigEntry(
@@ -471,14 +471,15 @@ async def test_form_already_configured(
             {"host": "1.1.1.1"},
         )
 
-        assert result2["type"] == "abort"
+        assert result2["type"] is FlowResultType.ABORT
         assert result2["reason"] == "already_configured"
 
     # Test config entry got updated with latest IP
     assert entry.data["host"] == "1.1.1.1"
 
 
-async def test_zeroconf(hass: HomeAssistant, mock_zeroconf: None) -> None:
+@pytest.mark.usefixtures("mock_zeroconf")
+async def test_zeroconf(hass: HomeAssistant) -> None:
     """Test we get the form."""
 
     with (
@@ -502,7 +503,7 @@ async def test_zeroconf(hass: HomeAssistant, mock_zeroconf: None) -> None:
             data=DISCOVERY_INFO,
             context={"source": config_entries.SOURCE_ZEROCONF},
         )
-        assert result["type"] == "form"
+        assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "confirm_discovery"
         assert result["errors"] == {}
         context = next(
@@ -516,7 +517,7 @@ async def test_zeroconf(hass: HomeAssistant, mock_zeroconf: None) -> None:
         result["flow_id"],
         {},
     )
-    assert result2["type"] == "form"
+    assert result2["type"] is FlowResultType.FORM
     assert result2["step_id"] == "credentials"
 
     with (
@@ -544,21 +545,20 @@ async def test_zeroconf(hass: HomeAssistant, mock_zeroconf: None) -> None:
         )
         await hass.async_block_till_done()
 
-    assert result3["type"] == "create_entry"
+    assert result3["type"] is FlowResultType.CREATE_ENTRY
     assert result3["title"] == "shc012345"
     assert result3["data"] == {
         "host": "1.1.1.1",
-        "ssl_certificate": hass.config.path(DOMAIN, CONF_SHC_CERT),
-        "ssl_key": hass.config.path(DOMAIN, CONF_SHC_KEY),
+        "ssl_certificate": hass.config.path(DOMAIN, "test-mac", CONF_SHC_CERT),
+        "ssl_key": hass.config.path(DOMAIN, "test-mac", CONF_SHC_KEY),
         "token": "abc:123",
         "hostname": "123",
     }
     assert len(mock_setup_entry.mock_calls) == 1
 
 
-async def test_zeroconf_already_configured(
-    hass: HomeAssistant, mock_zeroconf: None
-) -> None:
+@pytest.mark.usefixtures("mock_zeroconf")
+async def test_zeroconf_already_configured(hass: HomeAssistant) -> None:
     """Test we get the form."""
 
     entry = MockConfigEntry(
@@ -588,16 +588,15 @@ async def test_zeroconf_already_configured(
             context={"source": config_entries.SOURCE_ZEROCONF},
         )
 
-        assert result["type"] == "abort"
+        assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == "already_configured"
 
     # Test config entry got updated with latest IP
     assert entry.data["host"] == "1.1.1.1"
 
 
-async def test_zeroconf_cannot_connect(
-    hass: HomeAssistant, mock_zeroconf: None
-) -> None:
+@pytest.mark.usefixtures("mock_zeroconf")
+async def test_zeroconf_cannot_connect(hass: HomeAssistant) -> None:
     """Test we get the form."""
     with patch(
         "boschshcpy.session.SHCSession.mdns_info", side_effect=SHCConnectionError
@@ -607,11 +606,12 @@ async def test_zeroconf_cannot_connect(
             data=DISCOVERY_INFO,
             context={"source": config_entries.SOURCE_ZEROCONF},
         )
-        assert result["type"] == "abort"
+        assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == "cannot_connect"
 
 
-async def test_zeroconf_not_bosch_shc(hass: HomeAssistant, mock_zeroconf: None) -> None:
+@pytest.mark.usefixtures("mock_zeroconf")
+async def test_zeroconf_not_bosch_shc(hass: HomeAssistant) -> None:
     """Test we filter out non-bosch_shc devices."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
@@ -626,11 +626,12 @@ async def test_zeroconf_not_bosch_shc(hass: HomeAssistant, mock_zeroconf: None) 
         ),
         context={"source": config_entries.SOURCE_ZEROCONF},
     )
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "not_bosch_shc"
 
 
-async def test_reauth(hass: HomeAssistant, mock_zeroconf: None) -> None:
+@pytest.mark.usefixtures("mock_zeroconf")
+async def test_reauth(hass: HomeAssistant) -> None:
     """Test we get the form."""
 
     mock_config = MockConfigEntry(
@@ -645,12 +646,8 @@ async def test_reauth(hass: HomeAssistant, mock_zeroconf: None) -> None:
         title="shc012345",
     )
     mock_config.add_to_hass(hass)
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_REAUTH},
-        data=mock_config.data,
-    )
-    assert result["type"] == "form"
+    result = await mock_config.start_reauth_flow(hass)
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "reauth_confirm"
 
     with (
@@ -674,7 +671,7 @@ async def test_reauth(hass: HomeAssistant, mock_zeroconf: None) -> None:
             {"host": "2.2.2.2"},
         )
 
-        assert result2["type"] == "form"
+        assert result2["type"] is FlowResultType.FORM
         assert result2["step_id"] == "credentials"
         assert result2["errors"] == {}
 
@@ -701,7 +698,7 @@ async def test_reauth(hass: HomeAssistant, mock_zeroconf: None) -> None:
         )
         await hass.async_block_till_done()
 
-    assert result3["type"] == "abort"
+    assert result3["type"] is FlowResultType.ABORT
     assert result3["reason"] == "reauth_successful"
 
     assert mock_config.data["host"] == "2.2.2.2"
@@ -711,6 +708,7 @@ async def test_reauth(hass: HomeAssistant, mock_zeroconf: None) -> None:
 
 async def test_tls_assets_writer(hass: HomeAssistant) -> None:
     """Test we write tls assets to correct location."""
+    unique_id = "test-mac"
     assets = {
         "token": "abc:123",
         "cert": b"content_cert",
@@ -722,14 +720,163 @@ async def test_tls_assets_writer(hass: HomeAssistant) -> None:
             "homeassistant.components.bosch_shc.config_flow.open", mock_open()
         ) as mocked_file,
     ):
-        write_tls_asset(hass, CONF_SHC_CERT, assets["cert"])
+        write_tls_asset(hass, unique_id, CONF_SHC_CERT, assets["cert"])
         mocked_file.assert_called_with(
-            hass.config.path(DOMAIN, CONF_SHC_CERT), "w", encoding="utf8"
+            hass.config.path(DOMAIN, unique_id, CONF_SHC_CERT), "w", encoding="utf8"
         )
         mocked_file().write.assert_called_with("content_cert")
 
-        write_tls_asset(hass, CONF_SHC_KEY, assets["key"])
+        write_tls_asset(hass, unique_id, CONF_SHC_KEY, assets["key"])
         mocked_file.assert_called_with(
-            hass.config.path(DOMAIN, CONF_SHC_KEY), "w", encoding="utf8"
+            hass.config.path(DOMAIN, unique_id, CONF_SHC_KEY), "w", encoding="utf8"
         )
         mocked_file().write.assert_called_with("content_key")
+
+
+@pytest.mark.usefixtures("mock_zeroconf")
+async def test_register_multiple_controllers(hass: HomeAssistant) -> None:
+    """Test register multiple controllers.
+
+    Each registered controller must get its own key/certificate pair,
+    which must not get overwritten when a new controller is added.
+    """
+
+    controller_1 = {
+        "hostname": "shc111111",
+        "mac": "test-mac1",
+        "host": "1.1.1.1",
+        "register": {
+            "token": "abc:shc111111",
+            "cert": b"content_cert1",
+            "key": b"content_key1",
+        },
+    }
+    controller_2 = {
+        "hostname": "shc222222",
+        "mac": "test-mac2",
+        "host": "2.2.2.2",
+        "register": {
+            "token": "abc:shc222222",
+            "cert": b"content_cert2",
+            "key": b"content_key2",
+        },
+    }
+
+    # Set up controller 1
+    ctrl_1_result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+
+    with (
+        patch(
+            "boschshcpy.session.SHCSession.mdns_info",
+            return_value=SHCInformation,
+        ),
+        patch(
+            "boschshcpy.information.SHCInformation.name",
+            new_callable=PropertyMock,
+            return_value=controller_1["hostname"],
+        ),
+        patch(
+            "boschshcpy.information.SHCInformation.unique_id",
+            new_callable=PropertyMock,
+            return_value=controller_1["mac"],
+        ),
+    ):
+        ctrl_1_result2 = await hass.config_entries.flow.async_configure(
+            ctrl_1_result["flow_id"],
+            {"host": controller_1["host"]},
+        )
+
+    with (
+        patch(
+            "boschshcpy.register_client.SHCRegisterClient.register",
+            return_value=controller_1["register"],
+        ),
+        patch("os.mkdir"),
+        patch("homeassistant.components.bosch_shc.config_flow.open"),
+        patch("boschshcpy.session.SHCSession.authenticate"),
+        patch(
+            "homeassistant.components.bosch_shc.async_setup_entry",
+            return_value=True,
+        ),
+    ):
+        ctrl_1_result3 = await hass.config_entries.flow.async_configure(
+            ctrl_1_result2["flow_id"],
+            {"password": "test"},
+        )
+        await hass.async_block_till_done()
+
+    assert ctrl_1_result3["type"] is FlowResultType.CREATE_ENTRY
+    assert ctrl_1_result3["title"] == "shc111111"
+    assert ctrl_1_result3["context"]["unique_id"] == controller_1["mac"]
+    assert ctrl_1_result3["data"] == {
+        "host": "1.1.1.1",
+        "ssl_certificate": hass.config.path(DOMAIN, controller_1["mac"], CONF_SHC_CERT),
+        "ssl_key": hass.config.path(DOMAIN, controller_1["mac"], CONF_SHC_KEY),
+        "token": "abc:shc111111",
+        "hostname": "shc111111",
+    }
+
+    # Set up controller 2
+    ctrl_2_result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+
+    with (
+        patch(
+            "boschshcpy.session.SHCSession.mdns_info",
+            return_value=SHCInformation,
+        ),
+        patch(
+            "boschshcpy.information.SHCInformation.name",
+            new_callable=PropertyMock,
+            return_value=controller_2["hostname"],
+        ),
+        patch(
+            "boschshcpy.information.SHCInformation.unique_id",
+            new_callable=PropertyMock,
+            return_value=controller_2["mac"],
+        ),
+    ):
+        ctrl_2_result2 = await hass.config_entries.flow.async_configure(
+            ctrl_2_result["flow_id"],
+            {"host": controller_2["host"]},
+        )
+
+    with (
+        patch(
+            "boschshcpy.register_client.SHCRegisterClient.register",
+            return_value=controller_2["register"],
+        ),
+        patch("os.mkdir"),
+        patch("homeassistant.components.bosch_shc.config_flow.open"),
+        patch("boschshcpy.session.SHCSession.authenticate"),
+        patch(
+            "homeassistant.components.bosch_shc.async_setup_entry",
+            return_value=True,
+        ),
+    ):
+        ctrl_2_result3 = await hass.config_entries.flow.async_configure(
+            ctrl_2_result2["flow_id"],
+            {"password": "test"},
+        )
+        await hass.async_block_till_done()
+
+    assert ctrl_2_result3["type"] is FlowResultType.CREATE_ENTRY
+    assert ctrl_2_result3["title"] == "shc222222"
+    assert ctrl_2_result3["context"]["unique_id"] == controller_2["mac"]
+    assert ctrl_2_result3["data"] == {
+        "host": "2.2.2.2",
+        "ssl_certificate": hass.config.path(DOMAIN, controller_2["mac"], CONF_SHC_CERT),
+        "ssl_key": hass.config.path(DOMAIN, controller_2["mac"], CONF_SHC_KEY),
+        "token": "abc:shc222222",
+        "hostname": "shc222222",
+    }
+
+    # Check that each controller has its own key/certificate pair
+    assert (
+        ctrl_1_result3["data"]["ssl_certificate"]
+        != ctrl_2_result3["data"]["ssl_certificate"]
+    )
+    assert ctrl_1_result3["data"]["ssl_key"] != ctrl_2_result3["data"]["ssl_key"]

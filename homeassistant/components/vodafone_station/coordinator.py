@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from json.decoder import JSONDecodeError
 from typing import Any
 
 from aiovodafone import VodafoneStationDevice, VodafoneStationSercommApi, exceptions
@@ -107,8 +108,9 @@ class VodafoneStationRouter(DataUpdateCoordinator[UpdateCoordinatorDataType]):
                 exceptions.CannotConnect,
                 exceptions.AlreadyLogged,
                 exceptions.GenericLoginError,
+                JSONDecodeError,
             ) as err:
-                raise UpdateFailed(f"Error fetching data: {repr(err)}") from err
+                raise UpdateFailed(f"Error fetching data: {err!r}") from err
         except (ConfigEntryAuthFailed, UpdateFailed):
             await self.api.close()
             raise

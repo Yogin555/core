@@ -14,6 +14,9 @@ from samsungtvws.exceptions import (
     UnauthorizedError,
 )
 from websockets import frames
+
+# WebSocketProtocolError was deprecated in websockets '14.0'
+# pylint: disable-next=no-name-in-module
 from websockets.exceptions import (
     ConnectionClosedError,
     WebSocketException,
@@ -22,6 +25,7 @@ from websockets.exceptions import (
 
 from homeassistant import config_entries
 from homeassistant.components import dhcp, ssdp, zeroconf
+from homeassistant.components.samsungtv.config_flow import SamsungTVConfigFlow
 from homeassistant.components.samsungtv.const import (
     CONF_MANUFACTURER,
     CONF_SESSION_ID,
@@ -43,6 +47,7 @@ from homeassistant.components.ssdp import (
     ATTR_UPNP_UDN,
     SsdpServiceInfo,
 )
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import (
     CONF_HOST,
     CONF_ID,
@@ -55,7 +60,7 @@ from homeassistant.const import (
     CONF_TOKEN,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.data_entry_flow import BaseServiceInfo, FlowResultType
 from homeassistant.setup import async_setup_component
 
 from .const import (
@@ -214,7 +219,7 @@ async def test_user_legacy(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
-    assert result["type"] == "form"
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "user"
 
     # entry was added
@@ -222,7 +227,7 @@ async def test_user_legacy(hass: HomeAssistant) -> None:
         result["flow_id"], user_input=MOCK_USER_DATA
     )
     # legacy tv entry created
-    assert result["type"] == "create_entry"
+    assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "fake_name"
     assert result["data"][CONF_HOST] == "fake_host"
     assert result["data"][CONF_NAME] == "fake_name"
@@ -243,7 +248,7 @@ async def test_user_legacy_does_not_ok_first_time(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
         )
-        assert result["type"] == "form"
+        assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "user"
         # entry was added
         result2 = await hass.config_entries.flow.async_configure(
@@ -257,7 +262,7 @@ async def test_user_legacy_does_not_ok_first_time(hass: HomeAssistant) -> None:
         )
 
     # legacy tv entry created
-    assert result3["type"] == "create_entry"
+    assert result3["type"] is FlowResultType.CREATE_ENTRY
     assert result3["title"] == "fake_name"
     assert result3["data"][CONF_HOST] == "fake_host"
     assert result3["data"][CONF_NAME] == "fake_name"
@@ -277,7 +282,7 @@ async def test_user_websocket(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
         )
-        assert result["type"] == "form"
+        assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "user"
 
         # entry was added
@@ -285,7 +290,7 @@ async def test_user_websocket(hass: HomeAssistant) -> None:
             result["flow_id"], user_input=MOCK_USER_DATA
         )
         # websocket tv entry created
-        assert result["type"] == "create_entry"
+        assert result["type"] is FlowResultType.CREATE_ENTRY
         assert result["title"] == "Living Room (82GXARRS)"
         assert result["data"][CONF_HOST] == "fake_host"
         assert result["data"][CONF_NAME] == "Living Room"
@@ -304,7 +309,7 @@ async def test_user_encrypted_websocket(
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
-    assert result["type"] == "form"
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "user"
 
     with patch(
@@ -321,7 +326,7 @@ async def test_user_encrypted_websocket(
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"], user_input=MOCK_USER_DATA
         )
-        assert result2["type"] == "form"
+        assert result2["type"] is FlowResultType.FORM
         assert result2["step_id"] == "encrypted_pairing"
 
         result3 = await hass.config_entries.flow.async_configure(
@@ -334,7 +339,7 @@ async def test_user_encrypted_websocket(
             result3["flow_id"], user_input={"pin": "1234"}
         )
 
-    assert result4["type"] == "create_entry"
+    assert result4["type"] is FlowResultType.CREATE_ENTRY
     assert result4["title"] == "TV-UE48JU6470 (UE48JU6400)"
     assert result4["data"][CONF_HOST] == "fake_host"
     assert result4["data"][CONF_NAME] == "TV-UE48JU6470"
@@ -358,7 +363,7 @@ async def test_user_legacy_missing_auth(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}, data=MOCK_USER_DATA
         )
-        assert result["type"] == FlowResultType.FORM
+        assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "pairing"
         assert result["errors"] == {"base": "auth_missing"}
 
@@ -370,7 +375,7 @@ async def test_user_legacy_missing_auth(hass: HomeAssistant) -> None:
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"], user_input={}
         )
-        assert result2["type"] == FlowResultType.ABORT
+        assert result2["type"] is FlowResultType.ABORT
         assert result2["reason"] == RESULT_CANNOT_CONNECT
 
 
@@ -385,7 +390,7 @@ async def test_user_legacy_not_supported(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}, data=MOCK_USER_DATA
         )
-        assert result["type"] == "abort"
+        assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == RESULT_NOT_SUPPORTED
 
 
@@ -406,7 +411,7 @@ async def test_user_websocket_not_supported(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}, data=MOCK_USER_DATA
         )
-        assert result["type"] == "abort"
+        assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == RESULT_NOT_SUPPORTED
 
 
@@ -429,7 +434,7 @@ async def test_user_websocket_access_denied(
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}, data=MOCK_USER_DATA
         )
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == RESULT_NOT_SUPPORTED
     assert "Please check the Device Connection Manager on your TV" in caplog.text
 
@@ -451,7 +456,7 @@ async def test_user_websocket_auth_retry(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}, data=MOCK_USER_DATA
         )
-    assert result["type"] == FlowResultType.FORM
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "pairing"
     assert result["errors"] == {"base": "auth_missing"}
     with (
@@ -466,7 +471,7 @@ async def test_user_websocket_auth_retry(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], user_input={}
         )
-    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Living Room (82GXARRS)"
     assert result["data"][CONF_HOST] == "fake_host"
     assert result["data"][CONF_NAME] == "Living Room"
@@ -491,7 +496,7 @@ async def test_user_not_successful(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}, data=MOCK_USER_DATA
         )
-        assert result["type"] == "abort"
+        assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == RESULT_CANNOT_CONNECT
 
 
@@ -511,7 +516,7 @@ async def test_user_not_successful_2(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}, data=MOCK_USER_DATA
         )
-        assert result["type"] == "abort"
+        assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == RESULT_CANNOT_CONNECT
 
 
@@ -522,14 +527,14 @@ async def test_ssdp(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=MOCK_SSDP_DATA
     )
-    assert result["type"] == "form"
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "confirm"
 
     # entry was added
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input="whatever"
     )
-    assert result["type"] == "create_entry"
+    assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "fake_model"
     assert result["data"][CONF_HOST] == "fake_host"
     assert result["data"][CONF_NAME] == "fake_model"
@@ -546,7 +551,7 @@ async def test_ssdp_no_manufacturer(hass: HomeAssistant) -> None:
         context={"source": config_entries.SOURCE_SSDP},
         data=MOCK_SSDP_DATA_NO_MANUFACTURER,
     )
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "not_supported"
 
 
@@ -561,7 +566,7 @@ async def test_ssdp_legacy_not_remote_control_receiver_udn(
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=data
     )
-    assert result["type"] == FlowResultType.ABORT
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == RESULT_NOT_SUPPORTED
 
 
@@ -574,13 +579,13 @@ async def test_ssdp_noprefix(hass: HomeAssistant) -> None:
         context={"source": config_entries.SOURCE_SSDP},
         data=MOCK_SSDP_DATA_NOPREFIX,
     )
-    assert result["type"] == "form"
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "confirm"
     # entry was added
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input="whatever"
     )
-    assert result["type"] == "create_entry"
+    assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "fake2_model"
     assert result["data"][CONF_HOST] == "fake2_host"
     assert result["data"][CONF_NAME] == "fake2_model"
@@ -600,14 +605,14 @@ async def test_ssdp_legacy_missing_auth(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=MOCK_SSDP_DATA
         )
-        assert result["type"] == "form"
+        assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "confirm"
 
         # missing authentication
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], user_input={}
         )
-        assert result["type"] == FlowResultType.FORM
+        assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "pairing"
         assert result["errors"] == {"base": "auth_missing"}
 
@@ -616,7 +621,7 @@ async def test_ssdp_legacy_missing_auth(hass: HomeAssistant) -> None:
             result["flow_id"], user_input={}
         )
 
-    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "fake_model"
     assert result["data"][CONF_HOST] == "fake_host"
     assert result["data"][CONF_NAME] == "fake_model"
@@ -636,7 +641,7 @@ async def test_ssdp_legacy_not_supported(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=MOCK_SSDP_DATA
         )
-        assert result["type"] == FlowResultType.ABORT
+        assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == RESULT_NOT_SUPPORTED
 
 
@@ -650,13 +655,13 @@ async def test_ssdp_websocket_success_populates_mac_address_and_ssdp_location(
         context={"source": config_entries.SOURCE_SSDP},
         data=MOCK_SSDP_DATA_RENDERING_CONTROL_ST,
     )
-    assert result["type"] == "form"
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "confirm"
 
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input="whatever"
     )
-    assert result["type"] == "create_entry"
+    assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Living Room (82GXARRS)"
     assert result["data"][CONF_HOST] == "fake_host"
     assert result["data"][CONF_NAME] == "Living Room"
@@ -680,13 +685,13 @@ async def test_ssdp_websocket_success_populates_mac_address_and_main_tv_ssdp_loc
         context={"source": config_entries.SOURCE_SSDP},
         data=MOCK_SSDP_DATA_MAIN_TV_AGENT_ST,
     )
-    assert result["type"] == "form"
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "confirm"
 
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input="whatever"
     )
-    assert result["type"] == "create_entry"
+    assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Living Room (82GXARRS)"
     assert result["data"][CONF_HOST] == "fake_host"
     assert result["data"][CONF_NAME] == "Living Room"
@@ -710,7 +715,7 @@ async def test_ssdp_encrypted_websocket_success_populates_mac_address_and_ssdp_l
         context={"source": config_entries.SOURCE_SSDP},
         data=MOCK_SSDP_DATA_RENDERING_CONTROL_ST,
     )
-    assert result["type"] == "form"
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "confirm"
 
     with patch(
@@ -738,7 +743,7 @@ async def test_ssdp_encrypted_websocket_success_populates_mac_address_and_ssdp_l
             result3["flow_id"], user_input={"pin": "1234"}
         )
 
-    assert result4["type"] == "create_entry"
+    assert result4["type"] is FlowResultType.CREATE_ENTRY
     assert result4["title"] == "TV-UE48JU6470 (UE48JU6400)"
     assert result4["data"][CONF_HOST] == "fake_host"
     assert result4["data"][CONF_NAME] == "TV-UE48JU6470"
@@ -768,7 +773,7 @@ async def test_ssdp_encrypted_websocket_not_supported(
             context={"source": config_entries.SOURCE_SSDP},
             data=MOCK_SSDP_DATA_RENDERING_CONTROL_ST,
         )
-        assert result["type"] == FlowResultType.ABORT
+        assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == RESULT_NOT_SUPPORTED
 
 
@@ -793,7 +798,7 @@ async def test_ssdp_websocket_cannot_connect(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=MOCK_SSDP_DATA
         )
-        assert result["type"] == "abort"
+        assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == RESULT_CANNOT_CONNECT
 
 
@@ -807,7 +812,7 @@ async def test_ssdp_model_not_supported(hass: HomeAssistant) -> None:
         context={"source": config_entries.SOURCE_SSDP},
         data=MOCK_SSDP_DATA_WRONGMODEL,
     )
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == RESULT_NOT_SUPPORTED
 
 
@@ -832,14 +837,14 @@ async def test_ssdp_not_successful(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=MOCK_SSDP_DATA
         )
-        assert result["type"] == "form"
+        assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "confirm"
 
         # device not found
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], user_input="whatever"
         )
-        assert result["type"] == "abort"
+        assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == RESULT_CANNOT_CONNECT
 
 
@@ -864,14 +869,14 @@ async def test_ssdp_not_successful_2(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=MOCK_SSDP_DATA
         )
-        assert result["type"] == "form"
+        assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "confirm"
 
         # device not found
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], user_input="whatever"
         )
-        assert result["type"] == "abort"
+        assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == RESULT_CANNOT_CONNECT
 
 
@@ -886,14 +891,14 @@ async def test_ssdp_already_in_progress(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=MOCK_SSDP_DATA
         )
-        assert result["type"] == "form"
+        assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "confirm"
 
         # failed as already in progress
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=MOCK_SSDP_DATA
         )
-        assert result["type"] == "abort"
+        assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == RESULT_ALREADY_IN_PROGRESS
 
 
@@ -908,7 +913,7 @@ async def test_ssdp_already_configured(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}, data=MOCK_USER_DATA
         )
-        assert result["type"] == "create_entry"
+        assert result["type"] is FlowResultType.CREATE_ENTRY
         entry = result["result"]
         assert entry.data[CONF_MANUFACTURER] == DEFAULT_MANUFACTURER
         assert entry.data[CONF_MODEL] == "fake_model"
@@ -918,7 +923,7 @@ async def test_ssdp_already_configured(hass: HomeAssistant) -> None:
         result2 = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=MOCK_SSDP_DATA
         )
-        assert result2["type"] == "abort"
+        assert result2["type"] is FlowResultType.ABORT
         assert result2["reason"] == RESULT_ALREADY_CONFIGURED
 
         # check updated device info
@@ -935,14 +940,14 @@ async def test_dhcp_wireless(hass: HomeAssistant) -> None:
         data=MOCK_DHCP_DATA,
     )
     await hass.async_block_till_done()
-    assert result["type"] == "form"
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "confirm"
 
     # entry was added
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input="whatever"
     )
-    assert result["type"] == "create_entry"
+    assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "TV-UE48JU6470 (UE48JU6400)"
     assert result["data"][CONF_HOST] == "fake_host"
     assert result["data"][CONF_NAME] == "TV-UE48JU6470"
@@ -964,14 +969,14 @@ async def test_dhcp_wired(hass: HomeAssistant, rest_api: Mock) -> None:
         data=MOCK_DHCP_DATA,
     )
     await hass.async_block_till_done()
-    assert result["type"] == "form"
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "confirm"
 
     # entry was added
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input="whatever"
     )
-    assert result["type"] == "create_entry"
+    assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Samsung Frame (43) (UE43LS003)"
     assert result["data"][CONF_HOST] == "fake_host"
     assert result["data"][CONF_NAME] == "Samsung Frame (43)"
@@ -979,6 +984,78 @@ async def test_dhcp_wired(hass: HomeAssistant, rest_api: Mock) -> None:
     assert result["data"][CONF_MANUFACTURER] == "Samsung"
     assert result["data"][CONF_MODEL] == "UE43LS003"
     assert result["result"].unique_id == "be9554b9-c9fb-41f4-8920-22da015376a4"
+
+
+@pytest.mark.usefixtures("remotews", "rest_api_non_ssl_only", "remoteencws_failing")
+@pytest.mark.parametrize(
+    ("source1", "data1", "source2", "data2", "is_matching_result"),
+    [
+        (
+            config_entries.SOURCE_DHCP,
+            MOCK_DHCP_DATA,
+            config_entries.SOURCE_DHCP,
+            MOCK_DHCP_DATA,
+            True,
+        ),
+        (
+            config_entries.SOURCE_DHCP,
+            MOCK_DHCP_DATA,
+            config_entries.SOURCE_ZEROCONF,
+            MOCK_ZEROCONF_DATA,
+            False,
+        ),
+        (
+            config_entries.SOURCE_ZEROCONF,
+            MOCK_ZEROCONF_DATA,
+            config_entries.SOURCE_DHCP,
+            MOCK_DHCP_DATA,
+            False,
+        ),
+        (
+            config_entries.SOURCE_ZEROCONF,
+            MOCK_ZEROCONF_DATA,
+            config_entries.SOURCE_ZEROCONF,
+            MOCK_ZEROCONF_DATA,
+            True,
+        ),
+    ],
+)
+async def test_dhcp_zeroconf_already_in_progress(
+    hass: HomeAssistant,
+    source1: str,
+    data1: BaseServiceInfo,
+    source2: str,
+    data2: BaseServiceInfo,
+    is_matching_result: bool,
+) -> None:
+    """Test starting a flow from dhcp or zeroconf when already in progress."""
+    # confirm to add the entry
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": source1}, data=data1
+    )
+    await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "confirm"
+
+    real_is_matching = SamsungTVConfigFlow.is_matching
+    return_values = []
+
+    def is_matching(self, other_flow) -> bool:
+        return_values.append(real_is_matching(self, other_flow))
+        return return_values[-1]
+
+    with patch.object(
+        SamsungTVConfigFlow, "is_matching", wraps=is_matching, autospec=True
+    ):
+        # confirm to add the entry
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": source2}, data=data2
+        )
+        await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == RESULT_ALREADY_IN_PROGRESS
+    # Ensure the is_matching method returned the expected value
+    assert return_values == [is_matching_result]
 
 
 @pytest.mark.usefixtures("remotews", "rest_api", "remoteencws_failing")
@@ -990,14 +1067,14 @@ async def test_zeroconf(hass: HomeAssistant) -> None:
         data=MOCK_ZEROCONF_DATA,
     )
     await hass.async_block_till_done()
-    assert result["type"] == "form"
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "confirm"
 
     # entry was added
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input="whatever"
     )
-    assert result["type"] == "create_entry"
+    assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Living Room (82GXARRS)"
     assert result["data"][CONF_HOST] == "127.0.0.1"
     assert result["data"][CONF_NAME] == "Living Room"
@@ -1026,7 +1103,7 @@ async def test_zeroconf_ignores_soundbar(hass: HomeAssistant, rest_api: Mock) ->
         data=MOCK_ZEROCONF_DATA,
     )
     await hass.async_block_till_done()
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "not_supported"
 
 
@@ -1039,7 +1116,7 @@ async def test_zeroconf_no_device_info(hass: HomeAssistant) -> None:
         data=MOCK_ZEROCONF_DATA,
     )
     await hass.async_block_till_done()
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "not_supported"
 
 
@@ -1052,7 +1129,7 @@ async def test_zeroconf_and_dhcp_same_time(hass: HomeAssistant) -> None:
         data=MOCK_DHCP_DATA,
     )
     await hass.async_block_till_done()
-    assert result["type"] == "form"
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "confirm"
 
     result2 = await hass.config_entries.flow.async_init(
@@ -1061,7 +1138,7 @@ async def test_zeroconf_and_dhcp_same_time(hass: HomeAssistant) -> None:
         data=MOCK_ZEROCONF_DATA,
     )
     await hass.async_block_till_done()
-    assert result2["type"] == "abort"
+    assert result2["type"] is FlowResultType.ABORT
     assert result2["reason"] == "already_in_progress"
 
 
@@ -1103,7 +1180,7 @@ async def test_autodetect_websocket(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}, data=MOCK_USER_DATA
         )
-        assert result["type"] == "create_entry"
+        assert result["type"] is FlowResultType.CREATE_ENTRY
         assert result["data"][CONF_METHOD] == "websocket"
         assert result["data"][CONF_TOKEN] == "123456789"
         remotews.assert_called_once_with(**AUTODETECT_WEBSOCKET_SSL)
@@ -1153,7 +1230,7 @@ async def test_websocket_no_mac(hass: HomeAssistant, mac_address: Mock) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}, data=MOCK_USER_DATA
         )
-        assert result["type"] == "create_entry"
+        assert result["type"] is FlowResultType.CREATE_ENTRY
         assert result["data"][CONF_METHOD] == "websocket"
         assert result["data"][CONF_TOKEN] == "123456789"
         assert result["data"][CONF_MAC] == "gg:ee:tt:mm:aa:cc"
@@ -1176,7 +1253,7 @@ async def test_autodetect_auth_missing(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}, data=MOCK_USER_DATA
         )
-        assert result["type"] == FlowResultType.FORM
+        assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "pairing"
         assert result["errors"] == {"base": "auth_missing"}
 
@@ -1191,7 +1268,7 @@ async def test_autodetect_auth_missing(hass: HomeAssistant) -> None:
             {},
         )
         await hass.async_block_till_done()
-        assert result2["type"] == FlowResultType.ABORT
+        assert result2["type"] is FlowResultType.ABORT
         assert result2["reason"] == RESULT_CANNOT_CONNECT
 
 
@@ -1205,7 +1282,7 @@ async def test_autodetect_not_supported(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}, data=MOCK_USER_DATA
         )
-        assert result["type"] == "abort"
+        assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == RESULT_NOT_SUPPORTED
         assert remote.call_count == 1
         assert remote.call_args_list == [call(AUTODETECT_LEGACY)]
@@ -1217,7 +1294,7 @@ async def test_autodetect_legacy(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}, data=MOCK_USER_DATA
     )
-    assert result["type"] == "create_entry"
+    assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_METHOD] == "legacy"
     assert result["data"][CONF_NAME] == "fake_name"
     assert result["data"][CONF_MAC] is None
@@ -1239,7 +1316,7 @@ async def test_autodetect_none(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}, data=MOCK_USER_DATA
         )
-        assert result["type"] == "abort"
+        assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == RESULT_CANNOT_CONNECT
         assert remote.call_count == 1
         assert remote.call_args_list == [
@@ -1268,7 +1345,7 @@ async def test_update_old_entry(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=MOCK_SSDP_DATA
     )
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == RESULT_ALREADY_CONFIGURED
 
     config_entries_domain = hass.config_entries.async_entries(DOMAIN)
@@ -1297,7 +1374,7 @@ async def test_update_missing_mac_unique_id_added_from_dhcp(
     await hass.async_block_till_done()
     assert len(mock_setup_entry.mock_calls) == 1
 
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_MAC] == "aa:bb:cc:dd:ee:ff"
     assert entry.unique_id == "be9554b9-c9fb-41f4-8920-22da015376a4"
@@ -1321,7 +1398,7 @@ async def test_update_incorrectly_formatted_mac_unique_id_added_from_dhcp(
     await hass.async_block_till_done()
     assert len(mock_setup_entry.mock_calls) == 1
 
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_MAC] == "aa:bb:cc:dd:ee:ff"
     assert entry.unique_id == "be9554b9-c9fb-41f4-8920-22da015376a4"
@@ -1345,7 +1422,7 @@ async def test_update_missing_mac_unique_id_added_from_zeroconf(
     await hass.async_block_till_done()
     assert len(mock_setup_entry.mock_calls) == 1
 
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_MAC] == "aa:bb:zz:ee:rr:oo"
     assert entry.unique_id == "be9554b9-c9fb-41f4-8920-22da015376a4"
@@ -1371,7 +1448,7 @@ async def test_update_missing_model_added_from_ssdp(
     await hass.async_block_till_done()
     assert len(mock_setup_entry.mock_calls) == 1
 
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_MODEL] == "fake_model"
 
@@ -1392,7 +1469,7 @@ async def test_update_missing_mac_unique_id_ssdp_location_added_from_ssdp(
     await hass.async_block_till_done()
     assert len(mock_setup_entry.mock_calls) == 1
 
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_MAC] == "aa:bb:aa:aa:aa:aa"
     # Wrong st
@@ -1419,7 +1496,7 @@ async def test_update_zeroconf_discovery_preserved_unique_id(
         data=MOCK_ZEROCONF_DATA,
     )
     await hass.async_block_till_done()
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "not_supported"
     assert entry.data[CONF_MAC] == "aa:bb:zz:ee:rr:oo"
     assert entry.unique_id == "original"
@@ -1448,7 +1525,7 @@ async def test_update_missing_mac_unique_id_added_ssdp_location_updated_from_ssd
     await hass.async_block_till_done()
     assert len(mock_setup_entry.mock_calls) == 1
 
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_MAC] == "aa:bb:aa:aa:aa:aa"
     # Wrong ST, ssdp location should not change
@@ -1481,7 +1558,7 @@ async def test_update_missing_mac_unique_id_added_ssdp_location_rendering_st_upd
     await hass.async_block_till_done()
     assert len(mock_setup_entry.mock_calls) == 1
 
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_MAC] == "aa:bb:aa:aa:aa:aa"
     # Correct ST, ssdp location should change
@@ -1516,7 +1593,7 @@ async def test_update_missing_mac_unique_id_added_ssdp_location_main_tv_agent_st
     await hass.async_block_till_done()
     assert len(mock_setup_entry.mock_calls) == 1
 
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_MAC] == "aa:bb:aa:aa:aa:aa"
     # Main TV Agent ST, ssdp location should change
@@ -1551,7 +1628,7 @@ async def test_update_ssdp_location_rendering_st_updated_from_ssdp(
     await hass.async_block_till_done()
     assert len(mock_setup_entry.mock_calls) == 1
 
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_MAC] == "aa:bb:aa:aa:aa:aa"
     # Correct ST, ssdp location should be added
@@ -1582,7 +1659,7 @@ async def test_update_main_tv_ssdp_location_rendering_st_updated_from_ssdp(
     await hass.async_block_till_done()
     assert len(mock_setup_entry.mock_calls) == 1
 
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_MAC] == "aa:bb:aa:aa:aa:aa"
     # Correct ST for MainTV, ssdp location should be added
@@ -1613,7 +1690,7 @@ async def test_update_missing_mac_added_unique_id_preserved_from_zeroconf(
     await hass.async_block_till_done()
     assert len(mock_setup_entry.mock_calls) == 1
 
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_MAC] == "aa:bb:zz:ee:rr:oo"
     assert entry.unique_id == "0d1cef00-00dc-1000-9c80-4844f7b172de"
@@ -1641,7 +1718,7 @@ async def test_update_legacy_missing_mac_from_dhcp(
     await hass.async_block_till_done()
     assert len(mock_setup_entry.mock_calls) == 1
 
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_MAC] == "aa:bb:cc:dd:ee:ff"
     assert entry.unique_id == "0d1cef00-00dc-1000-9c80-4844f7b172de"
@@ -1678,7 +1755,7 @@ async def test_update_legacy_missing_mac_from_dhcp_no_unique_id(
         await hass.async_block_till_done()
         assert len(mock_setup_entry.mock_calls) == 1
 
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "not_supported"
     assert entry.data[CONF_MAC] == "aa:bb:cc:dd:ee:ff"
     assert entry.unique_id is None
@@ -1704,7 +1781,7 @@ async def test_update_ssdp_location_unique_id_added_from_ssdp(
     await hass.async_block_till_done()
     assert len(mock_setup_entry.mock_calls) == 1
 
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_MAC] == "aa:bb:aa:aa:aa:aa"
     # Wrong st
@@ -1732,7 +1809,7 @@ async def test_update_ssdp_location_unique_id_added_from_ssdp_with_rendering_con
     await hass.async_block_till_done()
     assert len(mock_setup_entry.mock_calls) == 1
 
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_MAC] == "aa:bb:aa:aa:aa:aa"
     # Correct st
@@ -1748,12 +1825,8 @@ async def test_form_reauth_legacy(hass: HomeAssistant) -> None:
     """Test reauthenticate legacy."""
     entry = MockConfigEntry(domain=DOMAIN, data=MOCK_OLD_ENTRY)
     entry.add_to_hass(hass)
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"entry_id": entry.entry_id, "source": config_entries.SOURCE_REAUTH},
-        data=entry.data,
-    )
-    assert result["type"] == "form"
+    result = await entry.start_reauth_flow(hass)
+    assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {}
 
     result2 = await hass.config_entries.flow.async_configure(
@@ -1761,7 +1834,7 @@ async def test_form_reauth_legacy(hass: HomeAssistant) -> None:
         {},
     )
     await hass.async_block_till_done()
-    assert result2["type"] == "abort"
+    assert result2["type"] is FlowResultType.ABORT
     assert result2["reason"] == "reauth_successful"
 
 
@@ -1770,14 +1843,10 @@ async def test_form_reauth_websocket(hass: HomeAssistant) -> None:
     """Test reauthenticate websocket."""
     entry = MockConfigEntry(domain=DOMAIN, data=MOCK_ENTRYDATA_WS)
     entry.add_to_hass(hass)
-    assert entry.state == config_entries.ConfigEntryState.NOT_LOADED
+    assert entry.state is ConfigEntryState.NOT_LOADED
 
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"entry_id": entry.entry_id, "source": config_entries.SOURCE_REAUTH},
-        data=entry.data,
-    )
-    assert result["type"] == "form"
+    result = await entry.start_reauth_flow(hass)
+    assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {}
 
     result2 = await hass.config_entries.flow.async_configure(
@@ -1785,9 +1854,9 @@ async def test_form_reauth_websocket(hass: HomeAssistant) -> None:
         {},
     )
     await hass.async_block_till_done()
-    assert result2["type"] == "abort"
+    assert result2["type"] is FlowResultType.ABORT
     assert result2["reason"] == "reauth_successful"
-    assert entry.state == config_entries.ConfigEntryState.LOADED
+    assert entry.state is ConfigEntryState.LOADED
 
 
 @pytest.mark.usefixtures("rest_api")
@@ -1797,12 +1866,8 @@ async def test_form_reauth_websocket_cannot_connect(
     """Test reauthenticate websocket when we cannot connect on the first attempt."""
     entry = MockConfigEntry(domain=DOMAIN, data=MOCK_ENTRYDATA_WS)
     entry.add_to_hass(hass)
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"entry_id": entry.entry_id, "source": config_entries.SOURCE_REAUTH},
-        data=entry.data,
-    )
-    assert result["type"] == "form"
+    result = await entry.start_reauth_flow(hass)
+    assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {}
 
     with patch.object(remotews, "open", side_effect=ConnectionFailure):
@@ -1812,7 +1877,7 @@ async def test_form_reauth_websocket_cannot_connect(
         )
         await hass.async_block_till_done()
 
-    assert result2["type"] == "form"
+    assert result2["type"] is FlowResultType.FORM
     assert result2["errors"] == {"base": RESULT_AUTH_MISSING}
 
     result3 = await hass.config_entries.flow.async_configure(
@@ -1821,7 +1886,7 @@ async def test_form_reauth_websocket_cannot_connect(
     )
     await hass.async_block_till_done()
 
-    assert result3["type"] == "abort"
+    assert result3["type"] is FlowResultType.ABORT
     assert result3["reason"] == "reauth_successful"
 
 
@@ -1829,12 +1894,8 @@ async def test_form_reauth_websocket_not_supported(hass: HomeAssistant) -> None:
     """Test reauthenticate websocket when the device is not supported."""
     entry = MockConfigEntry(domain=DOMAIN, data=MOCK_ENTRYDATA_WS)
     entry.add_to_hass(hass)
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"entry_id": entry.entry_id, "source": config_entries.SOURCE_REAUTH},
-        data=entry.data,
-    )
-    assert result["type"] == "form"
+    result = await entry.start_reauth_flow(hass)
+    assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {}
 
     with patch(
@@ -1847,7 +1908,7 @@ async def test_form_reauth_websocket_not_supported(hass: HomeAssistant) -> None:
         )
         await hass.async_block_till_done()
 
-    assert result2["type"] == "abort"
+    assert result2["type"] is FlowResultType.ABORT
     assert result2["reason"] == "not_supported"
 
 
@@ -1860,14 +1921,10 @@ async def test_form_reauth_encrypted(hass: HomeAssistant) -> None:
 
     entry = MockConfigEntry(domain=DOMAIN, data=encrypted_entry_data)
     entry.add_to_hass(hass)
-    assert entry.state == config_entries.ConfigEntryState.NOT_LOADED
+    assert entry.state is ConfigEntryState.NOT_LOADED
 
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"entry_id": entry.entry_id, "source": config_entries.SOURCE_REAUTH},
-        data=entry.data,
-    )
-    assert result["type"] == "form"
+    result = await entry.start_reauth_flow(hass)
+    assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {}
 
     with patch(
@@ -1882,7 +1939,7 @@ async def test_form_reauth_encrypted(hass: HomeAssistant) -> None:
 
         result = await hass.config_entries.flow.async_configure(result["flow_id"])
 
-        assert result["type"] == "form"
+        assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "reauth_confirm"
         assert result["errors"] == {}
 
@@ -1891,14 +1948,14 @@ async def test_form_reauth_encrypted(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], user_input={}
         )
-        assert result["type"] == "form"
+        assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "reauth_confirm_encrypted"
 
         # Invalid PIN
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], user_input={"pin": "invalid"}
         )
-        assert result["type"] == "form"
+        assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "reauth_confirm_encrypted"
 
         # Valid PIN
@@ -1906,9 +1963,9 @@ async def test_form_reauth_encrypted(hass: HomeAssistant) -> None:
             result["flow_id"], user_input={"pin": "1234"}
         )
         await hass.async_block_till_done()
-        assert result["type"] == "abort"
+        assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == "reauth_successful"
-        assert entry.state == config_entries.ConfigEntryState.LOADED
+        assert entry.state is ConfigEntryState.LOADED
 
     authenticator_mock.assert_called_once()
     assert authenticator_mock.call_args[0] == ("fake_host",)
@@ -1945,7 +2002,7 @@ async def test_update_incorrect_udn_matching_upnp_udn_unique_id_added_from_ssdp(
     await hass.async_block_till_done()
     assert len(mock_setup_entry.mock_calls) == 1
 
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_MAC] == "aa:bb:aa:aa:aa:aa"
     assert entry.unique_id == "be9554b9-c9fb-41f4-8920-22da015376a4"
@@ -1971,7 +2028,7 @@ async def test_update_incorrect_udn_matching_mac_unique_id_added_from_ssdp(
     await hass.async_block_till_done()
     assert len(mock_setup_entry.mock_calls) == 1
 
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_MAC] == "aa:bb:aa:aa:aa:aa"
     assert entry.unique_id == "be9554b9-c9fb-41f4-8920-22da015376a4"
@@ -1998,7 +2055,7 @@ async def test_update_incorrect_udn_matching_mac_from_dhcp(
     await hass.async_block_till_done()
     assert len(mock_setup_entry.mock_calls) == 1
 
-    assert result["type"] == "abort"
+    assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_MAC] == "aa:bb:aa:aa:aa:aa"
     assert entry.unique_id == "be9554b9-c9fb-41f4-8920-22da015376a4"
@@ -2025,7 +2082,7 @@ async def test_no_update_incorrect_udn_not_matching_mac_from_dhcp(
     await hass.async_block_till_done()
     assert len(mock_setup_entry.mock_calls) == 0
 
-    assert result["type"] == "form"
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "confirm"
     assert entry.data[CONF_MAC] == "aa:bb:ss:ss:dd:pp"
     assert entry.unique_id == "0d1cef00-00dc-1000-9c80-4844f7b172de"
@@ -2042,7 +2099,7 @@ async def test_ssdp_update_mac(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}, data=MOCK_USER_DATA
         )
-        assert result["type"] == FlowResultType.CREATE_ENTRY
+        assert result["type"] is FlowResultType.CREATE_ENTRY
         entry = result["result"]
         assert entry.data[CONF_MANUFACTURER] == DEFAULT_MANUFACTURER
         assert entry.data[CONF_MODEL] == "fake_model"
@@ -2059,7 +2116,7 @@ async def test_ssdp_update_mac(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=MOCK_SSDP_DATA
         )
-        assert result["type"] == FlowResultType.ABORT
+        assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == RESULT_ALREADY_CONFIGURED
 
         # ensure mac wasn't updated with "none"
@@ -2076,7 +2133,7 @@ async def test_ssdp_update_mac(hass: HomeAssistant) -> None:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=MOCK_SSDP_DATA
         )
-        assert result["type"] == FlowResultType.ABORT
+        assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == RESULT_ALREADY_CONFIGURED
 
         # ensure mac was updated with new wifiMac value

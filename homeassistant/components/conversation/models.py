@@ -10,15 +10,35 @@ from homeassistant.core import Context
 from homeassistant.helpers import intent
 
 
+@dataclass(frozen=True)
+class AgentInfo:
+    """Container for conversation agent info."""
+
+    id: str
+    name: str
+
+
 @dataclass(slots=True)
 class ConversationInput:
     """User input to be processed."""
 
     text: str
+    """User spoken text."""
+
     context: Context
+    """Context of the request."""
+
     conversation_id: str | None
+    """Unique identifier for the conversation."""
+
     device_id: str | None
+    """Unique identifier for the device."""
+
     language: str
+    """Language of the request."""
+
+    agent_id: str | None = None
+    """Agent to use for processing."""
 
 
 @dataclass(slots=True)
